@@ -1,60 +1,101 @@
-from fastapi import FastAPI, Form
-from fastapi.responses import JSONResponse
-import subprocess
-import tempfile
-import os
-import time
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import docker
+import tempfile, os, shutil
+import asyncio
 
 app = FastAPI()
+client = docker.from_env()
 
-@app.post("/run")
-async def run_code(language: str = Form(...), code: str = Form(...), stdin: str = Form("")):
+@app.get("/")
+def home():
+    return {"msg": "Live Compiler WebSocket Backend Running"}
+
+@app.websocket("/ws/run")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
     try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            file_path = None
-            run_cmd = None
+        # Receive initial data: language & code
+        data = await ws.receive_json()
+        language = data.get("language")
+        code = data.get("code")
 
-            if language == "python":
-                file_path = os.path.join(tmpdir, "main.py")
-                run_cmd = ["python3", file_path]
-            elif language == "cpp":
-                file_path = os.path.join(tmpdir, "main.cpp")
-                exe_file = os.path.join(tmpdir, "a.out")
-                compile_cmd = ["g++", file_path, "-o", exe_file]
-                run_cmd = [exe_file]
-            elif language == "java":
-                file_path = os.path.join(tmpdir, "Main.java")
-                compile_cmd = ["javac", file_path]
-                run_cmd = ["java", "-cp", tmpdir, "Main"]
-            else:
-                return JSONResponse({"error": "Unsupported language"}, status_code=400)
+        tmpdir = tempfile.mkdtemp()
+        compile_cmd = None
+        run_cmd = []
 
-            # Write the code to file
-            with open(file_path, "w") as f:
-                f.write(code)
+        # Create code file & commands
+        if language == "python":
+            filename = "main.py"
+            open(os.path.join(tmpdir, filename), "w").write(code)
+            run_cmd = ["python3", filename]
+        elif language == "cpp":
+            filename = "main.cpp"
+            open(os.path.join(tmpdir, filename), "w").write(code)
+            compile_cmd = ["g++", filename, "-o", "a.out"]
+            run_cmd = ["./a.out"]
+        elif language == "java":
+            filename = "Main.java"
+            open(os.path.join(tmpdir, filename), "w").write(code)
+            compile_cmd = ["javac", filename]
+            run_cmd = ["java", "-cp", tmpdir, "Main"]
+        else:
+            await ws.send_text("Unsupported language")
+            await ws.close()
+            return
 
-            # Compile if needed
-            if language in ["cpp", "java"]:
-                compile_process = subprocess.run(
-                    compile_cmd, capture_output=True, text=True
-                )
-                if compile_process.returncode != 0:
-                    return JSONResponse({"error": compile_process.stderr}, status_code=400)
+        # Start Docker container
+        container = client.containers.run(
+            "code-runner",
+            command="sleep 60",
+            detach=True,
+            working_dir="/work",
+            network_disabled=True,
+            mem_limit="256m",
+            mounts=[docker.types.Mount("/work", tmpdir, type="bind")]
+        )
 
-            # Run the code with input
-            start = time.time()
-            result = subprocess.run(
-                run_cmd, input=stdin, capture_output=True, text=True, timeout=5
-            )
-            end = time.time()
+        # Compile step if needed
+        if compile_cmd:
+            compile_res = container.exec_run(compile_cmd)
+            if compile_res.exit_code != 0:
+                await ws.send_text("Compilation Error:\n" + compile_res.output.decode())
+                await ws.close()
+                container.remove(force=True)
+                shutil.rmtree(tmpdir)
+                return
 
-            return {
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "time": round(end - start, 3),
-            }
+        # Start interactive execution
+        exec_id = client.api.exec_create(
+            container.id, run_cmd, stdin=True, stdout=True, stderr=True, tty=True
+        )["Id"]
+        sock = client.api.exec_start(exec_id, detach=False, tty=True, socket=True)
 
-    except subprocess.TimeoutExpired:
-        return JSONResponse({"error": "Execution timed out"}, status_code=400)
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        async def read_output():
+            while True:
+                try:
+                    output = sock._sock.recv(1024)
+                    if not output:
+                        break
+                    await ws.send_text(output.decode(errors="replace"))
+                except Exception:
+                    break
+
+        # Run output reader in background
+        asyncio.create_task(read_output())
+
+        # Receive live input from frontend
+        while True:
+            msg = await ws.receive_text()
+            if msg.strip().lower() == "exit":
+                break
+            sock._sock.send((msg + "\n").encode())
+
+        await ws.send_text("\n[Session ended]")
+        await ws.close()
+
+    except WebSocketDisconnect:
+        pass
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        if 'container' in locals():
+            container.remove(force=True)
