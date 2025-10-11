@@ -1,101 +1,94 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-import docker
-import tempfile, os, shutil
+import httpx
 import asyncio
 
 app = FastAPI()
-client = docker.from_env()
+
+# Judge0 API endpoint
+JUDGE0_URL = "https://judge0-ce.p.rapidapi.com/submissions"
+# Replace with your RapidAPI Key
+RAPIDAPI_KEY = "<YOUR_RAPIDAPI_KEY>"
+RAPIDAPI_HOST = "judge0-ce.p.rapidapi.com"
+
+# Mapping languages to Judge0 language_id
+LANGUAGE_MAP = {
+    "python": 71,
+    "cpp": 52,
+    "java": 62
+}
 
 @app.get("/")
 def home():
-    return {"msg": "Live Compiler WebSocket Backend Running"}
+    return {"msg": "Live Compiler WebSocket Backend Running with Judge0"}
 
 @app.websocket("/ws/run")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
+    stdin_lines = []
     try:
-        # Receive initial data: language & code
+        # Receive initial code and language
         data = await ws.receive_json()
         language = data.get("language")
         code = data.get("code")
 
-        tmpdir = tempfile.mkdtemp()
-        compile_cmd = None
-        run_cmd = []
-
-        # Create code file & commands
-        if language == "python":
-            filename = "main.py"
-            open(os.path.join(tmpdir, filename), "w").write(code)
-            run_cmd = ["python3", filename]
-        elif language == "cpp":
-            filename = "main.cpp"
-            open(os.path.join(tmpdir, filename), "w").write(code)
-            compile_cmd = ["g++", filename, "-o", "a.out"]
-            run_cmd = ["./a.out"]
-        elif language == "java":
-            filename = "Main.java"
-            open(os.path.join(tmpdir, filename), "w").write(code)
-            compile_cmd = ["javac", filename]
-            run_cmd = ["java", "-cp", tmpdir, "Main"]
-        else:
-            await ws.send_text("Unsupported language")
+        if language not in LANGUAGE_MAP:
+            await ws.send_text("Unsupported language!")
             await ws.close()
             return
 
-        # Start Docker container
-        container = client.containers.run(
-            "code-runner",
-            command="sleep 60",
-            detach=True,
-            working_dir="/work",
-            network_disabled=True,
-            mem_limit="256m",
-            mounts=[docker.types.Mount("/work", tmpdir, type="bind")]
-        )
+        lang_id = LANGUAGE_MAP[language]
+        await ws.send_text("[Connected to live terminal]\nType your input below:")
 
-        # Compile step if needed
-        if compile_cmd:
-            compile_res = container.exec_run(compile_cmd)
-            if compile_res.exit_code != 0:
-                await ws.send_text("Compilation Error:\n" + compile_res.output.decode())
-                await ws.close()
-                container.remove(force=True)
-                shutil.rmtree(tmpdir)
-                return
+        # Function to submit code to Judge0
+        async def submit_code(stdin_text):
+            async with httpx.AsyncClient() as client:
+                headers = {
+                    "X-RapidAPI-Key": RAPIDAPI_KEY,
+                    "X-RapidAPI-Host": RAPIDAPI_HOST,
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "language_id": lang_id,
+                    "source_code": code,
+                    "stdin": stdin_text
+                }
+                # Wait=true makes Judge0 respond after execution
+                response = await client.post(
+                    JUDGE0_URL + "?base64_encoded=false&wait=true",
+                    headers=headers,
+                    json=payload,
+                    timeout=10
+                )
+                return response.json()
 
-        # Start interactive execution
-        exec_id = client.api.exec_create(
-            container.id, run_cmd, stdin=True, stdout=True, stderr=True, tty=True
-        )["Id"]
-        sock = client.api.exec_start(exec_id, detach=False, tty=True, socket=True)
-
-        async def read_output():
-            while True:
-                try:
-                    output = sock._sock.recv(1024)
-                    if not output:
-                        break
-                    await ws.send_text(output.decode(errors="replace"))
-                except Exception:
-                    break
-
-        # Run output reader in background
-        asyncio.create_task(read_output())
-
-        # Receive live input from frontend
+        # Loop to receive live input
         while True:
             msg = await ws.receive_text()
             if msg.strip().lower() == "exit":
-                break
-            sock._sock.send((msg + "\n").encode())
+                await ws.send_text("\n[Session ended]")
+                await ws.close()
+                return
 
-        await ws.send_text("\n[Session ended]")
-        await ws.close()
+            stdin_lines.append(msg)
+            stdin_text = "\n".join(stdin_lines)
+            result = await submit_code(stdin_text)
+
+            stdout = result.get("stdout") or ""
+            stderr = result.get("stderr") or ""
+            compile_output = result.get("compile_output") or ""
+
+            output_text = ""
+            if compile_output:
+                output_text += f"[Compile Error]\n{compile_output}\n"
+            if stderr:
+                output_text += f"[Runtime Error]\n{stderr}\n"
+            if stdout:
+                output_text += stdout
+
+            await ws.send_text(output_text)
 
     except WebSocketDisconnect:
-        pass
-    finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
-        if 'container' in locals():
-            container.remove(force=True)
+        print("Client disconnected")
+    except Exception as e:
+        await ws.send_text(f"[Error] {str(e)}")
+        await ws.close()
