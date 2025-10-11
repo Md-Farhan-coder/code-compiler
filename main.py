@@ -7,7 +7,7 @@ app = FastAPI()
 # Judge0 API endpoint
 JUDGE0_URL = "https://judge0-ce.p.rapidapi.com/submissions"
 # Replace with your RapidAPI Key
-RAPIDAPI_KEY = "<YOUR_RAPIDAPI_KEY>"
+RAPIDAPI_KEY = "760be94f96msh825896edecae3fep1ce5d0jsn68d6948d9b98"
 RAPIDAPI_HOST = "judge0-ce.p.rapidapi.com"
 
 # Mapping languages to Judge0 language_id
