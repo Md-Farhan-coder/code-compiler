@@ -1,94 +1,58 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-import httpx
-import asyncio
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import subprocess, tempfile, os, shutil, sys
 
-app = FastAPI()
+app = FastAPI(title="Python Online Compiler")
 
-# Judge0 API endpoint
-JUDGE0_URL = "https://judge0-ce.p.rapidapi.com/submissions"
-# Replace with your RapidAPI Key
-RAPIDAPI_KEY = "760be94f96msh825896edecae3fep1ce5d0jsn68d6948d9b98"
-RAPIDAPI_HOST = "judge0-ce.p.rapidapi.com"
+class RunRequest(BaseModel):
+    code: str
+    stdin: str = ""
 
-# Mapping languages to Judge0 language_id
-LANGUAGE_MAP = {
-    "python": 71,
-    "cpp": 52,
-    "java": 62
-}
+class RunResponse(BaseModel):
+    stdout: str
+    stderr: str
+    exit_code: int
+    timed_out: bool
 
-@app.get("/")
-def home():
-    return {"msg": "Live Compiler WebSocket Backend Running with Judge0"}
+@app.post("/run", response_model=RunResponse)
+def run_python(req: RunRequest):
+    folder = tempfile.mkdtemp()
+    code_file = os.path.join(folder, "main.py")
+    with open(code_file, "w") as f:
+        f.write(req.code)
 
-@app.websocket("/ws/run")
-async def websocket_endpoint(ws: WebSocket):
-    await ws.accept()
-    stdin_lines = []
     try:
-        # Receive initial code and language
-        data = await ws.receive_json()
-        language = data.get("language")
-        code = data.get("code")
+        proc = subprocess.Popen(
+            [sys.executable, code_file],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
 
-        if language not in LANGUAGE_MAP:
-            await ws.send_text("Unsupported language!")
-            await ws.close()
-            return
+        try:
+            stdout, stderr = proc.communicate(req.stdin, timeout=5)
+            timed_out = False
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            stdout, stderr = proc.communicate()
+            timed_out = True
 
-        lang_id = LANGUAGE_MAP[language]
-        await ws.send_text("[Connected to live terminal]\nType your input below:")
-
-        # Function to submit code to Judge0
-        async def submit_code(stdin_text):
-            async with httpx.AsyncClient() as client:
-                headers = {
-                    "X-RapidAPI-Key": RAPIDAPI_KEY,
-                    "X-RapidAPI-Host": RAPIDAPI_HOST,
-                    "Content-Type": "application/json"
-                }
-                payload = {
-                    "language_id": lang_id,
-                    "source_code": code,
-                    "stdin": stdin_text
-                }
-                # Wait=true makes Judge0 respond after execution
-                response = await client.post(
-                    JUDGE0_URL + "?base64_encoded=false&wait=true",
-                    headers=headers,
-                    json=payload,
-                    timeout=10
-                )
-                return response.json()
-
-        # Loop to receive live input
-        while True:
-            msg = await ws.receive_text()
-            if msg.strip().lower() == "exit":
-                await ws.send_text("\n[Session ended]")
-                await ws.close()
-                return
-
-            stdin_lines.append(msg)
-            stdin_text = "\n".join(stdin_lines)
-            result = await submit_code(stdin_text)
-
-            stdout = result.get("stdout") or ""
-            stderr = result.get("stderr") or ""
-            compile_output = result.get("compile_output") or ""
-
-            output_text = ""
-            if compile_output:
-                output_text += f"[Compile Error]\n{compile_output}\n"
-            if stderr:
-                output_text += f"[Runtime Error]\n{stderr}\n"
-            if stdout:
-                output_text += stdout
-
-            await ws.send_text(output_text)
-
-    except WebSocketDisconnect:
-        print("Client disconnected")
+        return RunResponse(
+            stdout=stdout,
+            stderr=stderr,
+            exit_code=proc.returncode,
+            timed_out=timed_out
+        )
     except Exception as e:
-        await ws.send_text(f"[Error] {str(e)}")
-        await ws.close()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        shutil.rmtree(folder)
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
