@@ -3,6 +3,14 @@ from pydantic import BaseModel
 import subprocess, tempfile, os, shutil, sys
 
 app = FastAPI(title="Python Online Compiler")
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   # use specific origins in production
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class RunRequest(BaseModel):
     code: str
