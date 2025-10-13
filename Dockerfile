@@ -1,27 +1,25 @@
-# Dockerfile
-FROM ubuntu:24.04
+# Use official Python image
+FROM python:3.11-slim
 
-# Avoid interactive prompts
-ENV DEBIAN_FRONTEND=noninteractive
+# Install compilers for C++ and Java
+RUN apt-get update && apt-get install -y \
+    g++ \
+    openjdk-17-jdk \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-venv python3-pip python3-dev build-essential g++ openjdk-17-jdk-headless \
-    ca-certificates curl tzdata && \
-    rm -rf /var/lib/apt/lists/*
-
-# Create app user (avoid running as root)
-RUN useradd --create-home --shell /bin/bash appuser
-WORKDIR /home/appuser/app
-USER appuser
+# Set working directory
+WORKDIR /app
 
 # Copy requirements and install
-COPY --chown=appuser:appuser requirements.txt /home/appuser/app/
-RUN python3 -m pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt .
+RUN python3 -m pip install --upgrade pip
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY --chown=appuser:appuser main.py /home/appuser/app/
+# Copy app files
+COPY . .
 
+# Expose FastAPI port
 EXPOSE 8000
 
-# Run using uvicorn
+# Run FastAPI server
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

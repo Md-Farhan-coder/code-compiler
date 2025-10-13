@@ -1,184 +1,67 @@
-# main.py
-# Simple FastAPI service that compiles/runs Python, C++ and Java code.
-# Request JSON:
-# {
-#   "language": "python" | "cpp" | "java",
-#   "code": "<source code>",
-#   "stdin": "<optional stdin, can contain newlines>",
-#   "timeout": 5   # optional, seconds for program run
-# }
-#
-# Response JSON:
-# {
-#   "stdout": "...",
-#   "stderr": "...",
-#   "compile_output": "...",   # non-empty for compile errors (cpp/java)
-#   "exit_code": 0,
-#   "timed_out": false
-# }
-
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import tempfile, os, shutil, subprocess, sys
+import subprocess
+import tempfile
+import os
 
-app = FastAPI(title="Multi-language Code Runner")
+app = FastAPI()
 
-# Allow CORS for testing. Replace "*" with specific origins in production.
+# Allow all origins (CORS fix for frontend)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-class RunReq(BaseModel):
-    language: str
-    code: str
-    stdin: str = ""
-    timeout: int = 5
-
-@app.get("/")
-def home():
-    return {"message": "Multi-language Code Runner is up."}
-
 @app.post("/run")
-async def run(req: RunReq):
-    lang = req.language.strip().lower()
-    code = req.code
-    stdin = req.stdin or ""
-    timeout = max(1, min(req.timeout, 30))  # clamp timeout between 1 and 30s
+async def run_code(request: Request):
+    data = await request.json()
+    code = data.get("code", "")
+    stdin = data.get("stdin", "")
+    language = data.get("language", "python").lower()
 
-    if lang not in ("python", "cpp", "java"):
-        raise HTTPException(status_code=400, detail="language must be one of: python, cpp, java")
-
-    # Create temporary workspace
-    tmpdir = tempfile.mkdtemp(prefix="code-run-")
-    try:
-        if lang == "python":
-            src_name = "main.py"
-            src_path = os.path.join(tmpdir, src_name)
-            with open(src_path, "w", encoding="utf-8") as f:
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        if language == "python":
+            code_file = os.path.join(tmpdirname, "main.py")
+            with open(code_file, "w") as f:
                 f.write(code)
+            cmd = ["python3", code_file]
 
-            # Run python script
-            try:
-                proc = subprocess.run(
-                    [sys.executable, src_name],
-                    cwd=tmpdir,
-                    input=stdin,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    timeout=timeout,
-                    text=True
-                )
-                return {
-                    "stdout": proc.stdout,
-                    "stderr": proc.stderr,
-                    "compile_output": "",
-                    "exit_code": proc.returncode,
-                    "timed_out": False
-                }
-            except subprocess.TimeoutExpired:
-                return {"stdout": "", "stderr": "Execution timed out", "compile_output": "", "exit_code": -1, "timed_out": True}
-
-        elif lang == "cpp":
-            src_name = "main.cpp"
-            exe_name = "main_exec"
-            src_path = os.path.join(tmpdir, src_name)
-            with open(src_path, "w", encoding="utf-8") as f:
+        elif language == "cpp":
+            code_file = os.path.join(tmpdirname, "main.cpp")
+            exe_file = os.path.join(tmpdirname, "a.out")
+            with open(code_file, "w") as f:
                 f.write(code)
+            compile_proc = subprocess.run(["g++", code_file, "-o", exe_file],
+                                          capture_output=True, text=True)
+            if compile_proc.returncode != 0:
+                return {"output": compile_proc.stderr}
+            cmd = [exe_file]
 
-            # Compile
-            try:
-                comp = subprocess.run(
-                    ["g++", src_name, "-O2", "-std=gnu++17", "-o", exe_name],
-                    cwd=tmpdir,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    timeout=10,
-                    text=True
-                )
-            except subprocess.TimeoutExpired:
-                return {"stdout": "", "stderr": "", "compile_output": "Compilation timed out", "exit_code": -1, "timed_out": True}
-
-            if comp.returncode != 0:
-                # compile error
-                return {"stdout": "", "stderr": "", "compile_output": comp.stderr, "exit_code": comp.returncode, "timed_out": False}
-
-            # Run executable
-            exe_path = os.path.join(tmpdir, exe_name)
-            try:
-                proc = subprocess.run(
-                    [f"./{exe_name}"],
-                    cwd=tmpdir,
-                    input=stdin,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    timeout=timeout,
-                    text=True
-                )
-                return {
-                    "stdout": proc.stdout,
-                    "stderr": proc.stderr,
-                    "compile_output": "",
-                    "exit_code": proc.returncode,
-                    "timed_out": False
-                }
-            except subprocess.TimeoutExpired:
-                return {"stdout": "", "stderr": "Execution timed out", "compile_output": "", "exit_code": -1, "timed_out": True}
-
-        elif lang == "java":
-            # We will use class name Main
-            src_name = "Main.java"
-            classname = "Main"
-            src_path = os.path.join(tmpdir, src_name)
-            with open(src_path, "w", encoding="utf-8") as f:
+        elif language == "java":
+            code_file = os.path.join(tmpdirname, "Main.java")
+            with open(code_file, "w") as f:
                 f.write(code)
+            compile_proc = subprocess.run(["javac", code_file],
+                                          capture_output=True, text=True)
+            if compile_proc.returncode != 0:
+                return {"output": compile_proc.stderr}
+            cmd = ["java", "-cp", tmpdirname, "Main"]
 
-            # Compile
-            try:
-                comp = subprocess.run(
-                    ["javac", src_name],
-                    cwd=tmpdir,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    timeout=10,
-                    text=True
-                )
-            except subprocess.TimeoutExpired:
-                return {"stdout": "", "stderr": "", "compile_output": "Compilation timed out", "exit_code": -1, "timed_out": True}
+        else:
+            return {"output": "Unsupported language"}
 
-            if comp.returncode != 0:
-                return {"stdout": "", "stderr": "", "compile_output": comp.stderr, "exit_code": comp.returncode, "timed_out": False}
-
-            # Run java class
-            try:
-                proc = subprocess.run(
-                    ["java", "-cp", ".", classname],
-                    cwd=tmpdir,
-                    input=stdin,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    timeout=timeout,
-                    text=True
-                )
-                return {
-                    "stdout": proc.stdout,
-                    "stderr": proc.stderr,
-                    "compile_output": "",
-                    "exit_code": proc.returncode,
-                    "timed_out": False
-                }
-            except subprocess.TimeoutExpired:
-                return {"stdout": "", "stderr": "Execution timed out", "compile_output": "", "exit_code": -1, "timed_out": True}
-
-    except Exception as e:
-        return {"stdout": "", "stderr": f"Server error: {e}", "compile_output": "", "exit_code": -1, "timed_out": False}
-    finally:
-        # cleanup
         try:
-            shutil.rmtree(tmpdir)
-        except Exception:
-            pass
+            result = subprocess.run(
+                cmd,
+                input=stdin.encode(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=5
+            )
+            output = result.stdout.decode() + result.stderr.decode()
+        except subprocess.TimeoutExpired:
+            output = "Execution timed out."
+
+        return {"output": output}
