@@ -36,7 +36,7 @@ async def run_code(request: Request):
             compile_proc = subprocess.run(["g++", code_file, "-o", exe_file],
                                           capture_output=True, text=True)
             if compile_proc.returncode != 0:
-                return {"output": compile_proc.stderr}
+                return {"stderr": compile_proc.stderr}
             cmd = [exe_file]
 
         elif language == "java":
@@ -46,11 +46,11 @@ async def run_code(request: Request):
             compile_proc = subprocess.run(["javac", code_file],
                                           capture_output=True, text=True)
             if compile_proc.returncode != 0:
-                return {"output": compile_proc.stderr}
+                return {"stderr": compile_proc.stderr}
             cmd = ["java", "-cp", tmpdirname, "Main"]
 
         else:
-            return {"output": "Unsupported language"}
+            return {"stderr": "Unsupported language"}
 
         try:
             result = subprocess.run(
@@ -60,8 +60,13 @@ async def run_code(request: Request):
                 stderr=subprocess.PIPE,
                 timeout=5
             )
-            output = result.stdout.decode() + result.stderr.decode()
+            return{
+                "stdout": result.stdout.decode(),
+                "stderr":result.stderr.decode()
+            }
+            #output = result.stdout.decode() + result.stderr.decode()
         except subprocess.TimeoutExpired:
             output = "Execution timed out."
 
-        return {"output": output}
+        return {"stderr":"Some Error Occur"               
+                }
