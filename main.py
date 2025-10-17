@@ -6,9 +6,15 @@ import os
 
 app = FastAPI()
 
+origins = [
+    "http://localhost:3000",       # your local frontend
+    "https://code-compiler-8mlf.onrender.com",    # add your production domain here
+]
 # Allow all origins (CORS fix for frontend)
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,    
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
