@@ -14,13 +14,101 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 🧠 Basic DSA Question Bank
+DSA_QUESTIONS = [
+    {
+        "id": 1,
+        "title": "Sum of Two Numbers",
+        "description": "Given two integers, print their sum.",
+        "sample_input": "2 3",
+        "sample_output": "5",
+        "testcases": [
+            {"input": "2 3", "output": "5"},
+            {"input": "10 20", "output": "30"},
+            {"input": "-5 8", "output": "3"}
+        ]
+    },
+    {
+        "id": 2,
+        "title": "Reverse a String",
+        "description": "Given a string, print its reverse.",
+        "sample_input": "hello",
+        "sample_output": "olleh",
+        "testcases": [
+            {"input": "hello", "output": "olleh"},
+            {"input": "abcd", "output": "dcba"},
+            {"input": "madam", "output": "madam"}
+        ]
+    }
+]
+
+
+@app.get("/")
+def home():
+    return {"message": "Online Compiler & DSA API is running!"}
+
+
+@app.get("/questions")
+def get_questions():
+    return {"questions": DSA_QUESTIONS}
+
+
+@app.get("/questions/{qid}")
+def get_question(qid: int):
+    for q in DSA_QUESTIONS:
+        if q["id"] == qid:
+            return q
+    return {"error": "Question not found"}
+
+
+@app.post("/submit")
+async def submit_solution(request: Request):
+    data = await request.json()
+    language = data.get("language", "python").lower()
+    code = data.get("code", "")
+    qid = data.get("question_id", None)
+
+    question = next((q for q in DSA_QUESTIONS if q["id"] == qid), None)
+    if not question:
+        return {"error": "Invalid question ID"}
+
+    passed = 0
+    total = len(question["testcases"])
+    results = []
+
+    for case in question["testcases"]:
+        result = run_code_direct(language, code, case["input"])
+        got = result["stdout"].strip()
+        expected = case["output"].strip()
+        is_passed = got == expected
+        if is_passed:
+            passed += 1
+        results.append({
+            "input": case["input"],
+            "expected": expected,
+            "got": got,
+            "passed": is_passed,
+            "stderr": result["stderr"]
+        })
+
+    return {
+        "question": question["title"],
+        "passed": passed,
+        "total": total,
+        "results": results
+    }
+
+
 @app.post("/run")
 async def run_code(request: Request):
     data = await request.json()
     code = data.get("code", "")
     stdin = data.get("stdin", "")
     language = data.get("language", "python").lower()
+    return run_code_direct(language, code, stdin)
 
+
+def run_code_direct(language, code, stdin):
     with tempfile.TemporaryDirectory() as tmpdirname:
         if language == "python":
             code_file = os.path.join(tmpdirname, "main.py")
@@ -36,7 +124,7 @@ async def run_code(request: Request):
             compile_proc = subprocess.run(["g++", code_file, "-o", exe_file],
                                           capture_output=True, text=True)
             if compile_proc.returncode != 0:
-                return {"stderr": compile_proc.stderr}
+                return {"stdout": "", "stderr": compile_proc.stderr}
             cmd = [exe_file]
 
         elif language == "java":
@@ -46,11 +134,17 @@ async def run_code(request: Request):
             compile_proc = subprocess.run(["javac", code_file],
                                           capture_output=True, text=True)
             if compile_proc.returncode != 0:
-                return {"stderr": compile_proc.stderr}
+                return {"stdout": "", "stderr": compile_proc.stderr}
             cmd = ["java", "-cp", tmpdirname, "Main"]
 
+        elif language == "javascript":
+            code_file = os.path.join(tmpdirname, "main.js")
+            with open(code_file, "w") as f:
+                f.write(code)
+            cmd = ["node", code_file]
+
         else:
-            return {"stderr": "Unsupported language"}
+            return {"stdout": "", "stderr": "Unsupported language"}
 
         try:
             result = subprocess.run(
@@ -60,13 +154,9 @@ async def run_code(request: Request):
                 stderr=subprocess.PIPE,
                 timeout=5
             )
-            return{
+            return {
                 "stdout": result.stdout.decode(),
-                "stderr":result.stderr.decode()
+                "stderr": result.stderr.decode()
             }
-            #output = result.stdout.decode() + result.stderr.decode()
         except subprocess.TimeoutExpired:
-            output = "Execution timed out."
-
-        return {"stderr":"Some Error Occur"               
-                }
+            return {"stdout": "", "stderr": "Execution timed out"}
