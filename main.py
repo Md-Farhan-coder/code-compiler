@@ -8,12 +8,14 @@ app = FastAPI()
 
 origins = [
     "http://localhost:3000",       # your local frontend
-    "https://code-compiler-8mlf.onrender.com",    # add your production domain here
+    "https://code-compiler-8mlf.onrender.com", 
+    "http://localhost:5173",  # Add Vite dev server
+    "http://127.0.0.1:3000",  # Add localhost variant   # add your production domain here
 ]
 # Allow all origins (CORS fix for frontend)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins, 
     allow_credentials=True,    
     
     allow_methods=["*"],
