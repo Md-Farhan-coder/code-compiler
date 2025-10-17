@@ -31,9 +31,9 @@ DSA_QUESTIONS = [
         "sample_input": "2 3",
         "sample_output": "5",
         "testcases": [
-            {"input": "2 3", "output": "5"},
-            {"input": "10 20", "output": "30"},
-            {"input": "-5 8", "output": "3"}
+            {"input": "2 \n 3", "output": "5"},
+            {"input": "10 \n 20", "output": "30"},
+            {"input": "-5 \n 8", "output": "3"}
         ]
     },
     {
