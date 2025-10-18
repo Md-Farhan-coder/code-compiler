@@ -30,11 +30,19 @@ DSA_QUESTIONS = [
         "description": "Given two integers, print their sum.",
         "sample_input": "2 3",
         "sample_output": "5",
+        "difficulty":"Easy",
+        "constraints": [
+            "2 <= nums.length <= 10^4",
+            "-10^9 <= nums[i] <= 10^9",
+            "-10^9 <= target <= 10^9",
+            "Only one valid answer exists."
+        ],
         "testcases": [
             {"input": "2\n3", "output": "5"},
             {"input": "10\n20", "output": "30"},
             {"input": "-5\n8", "output": "3"}
-        ]
+        ],
+        "tags":["Array","Math"]
     },
     {
         "id": 2,
