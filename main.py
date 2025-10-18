@@ -42,7 +42,9 @@ DSA_QUESTIONS = [
             {"input": "10\n20", "output": "30"},
             {"input": "-5\n8", "output": "3"}
         ],
-        "tags":["Array","Math"]
+        "tags":["Array","Math"],
+        "input_format":"Input two integers",
+        "output_format":"Print the sum only"
     },
     {
         "id": 2,
@@ -78,8 +80,9 @@ def get_question(qid: int):
                 "title":q.title,
                 "desscription":q.description,
                 "constraints":q.constraints,
-                "tags":q.tags
-
+                "tags":q.tags,
+                "input_format":q.input_format,
+                "output_format":q.output_format,
             }
     return {"error": "Question not found"}
 
