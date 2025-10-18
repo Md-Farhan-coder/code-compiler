@@ -78,11 +78,12 @@ def get_question(qid: int):
             return {
                 "id":q["id"],
                 "title":q["title"],
-                "desscription":q["description"],
+                "description":q["description"],
                 "constraints":q["constraints"],
                 "tags":q["tags"],
                 "input_format":q["input_format"],
                 "output_format":q["output_format"],
+                "difficulty":q["difficulty"]
             }
     return {"error": "Question not found"}
 
