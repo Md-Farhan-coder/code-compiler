@@ -76,13 +76,13 @@ def get_question(qid: int):
     for q in DSA_QUESTIONS:
         if q["id"] == qid:
             return {
-                "id":q.id,
-                "title":q.title,
-                "desscription":q.description,
-                "constraints":q.constraints,
-                "tags":q.tags,
-                "input_format":q.input_format,
-                "output_format":q.output_format,
+                "id":q["id"],
+                "title":q["title"],
+                "desscription":q["description"],
+                "constraints":q["constraints"],
+                "tags":q["tags"],
+                "input_format":q["input_format"],
+                "output_format":q["output_format"],
             }
     return {"error": "Question not found"}
 
