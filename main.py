@@ -47,17 +47,157 @@ DSA_QUESTIONS = [
         "output_format":"Print the sum only"
     },
     {
-        "id": 2,
-        "title": "Reverse a String",
-        "description": "Given a string, print its reverse.",
-        "sample_input": "hello",
-        "sample_output": "olleh",
-        "testcases": [
-            {"input": "hello", "output": "olleh"},
-            {"input": "abcd", "output": "dcba"},
-            {"input": "madam", "output": "madam"}
-        ]
-    }
+    "id": 2,
+    "title": "Palindrome Check",
+    "description": "Given a string, check if it is a palindrome. A palindrome is a string that reads the same forwards and backwards.",
+    "sample_input": "racecar",
+    "sample_output": "true",
+    "difficulty": "Easy",
+    "constraints": [
+        "1 <= s.length <= 10^5",
+        "s consists only of printable ASCII characters",
+        "Ignore case sensitivity",
+        "Ignore non-alphanumeric characters"
+    ],
+    "testcases": [
+        {"input": "racecar", "output": "true"},
+        {"input": "hello", "output": "false"},
+        {"input": "A man a plan a canal Panama", "output": "true"},
+        {"input": "12321", "output": "true"},
+        {"input": "No 'x' in Nixon", "output": "true"}
+    ],
+    "tags": ["String", "Two Pointers"],
+    "input_format": "Input a string",
+    "output_format": "Print 'true' if palindrome, 'false' otherwise"
+    },
+    {
+    "id": 3,
+    "title": "Reverse Integer",
+    "description": "Given a signed 32-bit integer, reverse its digits. If reversing causes overflow, return 0.",
+    "sample_input": "123",
+    "sample_output": "321",
+    "difficulty": "Medium",
+    "constraints": [
+        "-2^31 <= x <= 2^31 - 1",
+        "If reversed integer overflows 32-bit range, return 0",
+        "Leading zeros in reversed number should be omitted"
+    ],
+    "testcases": [
+        {"input": "123", "output": "321"},
+        {"input": "-123", "output": "-321"},
+        {"input": "120", "output": "21"},
+        {"input": "0", "output": "0"},
+        {"input": "1534236469", "output": "0"},
+        {"input": "-2147483648", "output": "0"}
+    ],
+    "tags": ["Math", "Number Theory"],
+    "input_format": "Input a single integer",
+    "output_format": "Print the reversed integer"
+    },
+    {
+    "id": 4,
+    "title": "Valid Parentheses",
+    "description": "Given a string s containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid. An input string is valid if: 1. Open brackets must be closed by the same type of brackets. 2. Open brackets must be closed in the correct order. 3. Every close bracket has a corresponding open bracket of the same type.",
+    "sample_input": "()[]{}",
+    "sample_output": "true",
+    "difficulty": "Medium",
+    "constraints": [
+        "1 <= s.length <= 10^4",
+        "s consists of parentheses only '()[]{}'",
+        "Empty string is considered valid"
+    ],
+    "testcases": [
+        {"input": "()[]{}", "output": "true"},
+        {"input": "([)]", "output": "false"},
+        {"input": "{[]}", "output": "true"},
+        {"input": "(]", "output": "false"},
+        {"input": "((()))", "output": "true"},
+        {"input": "([{}])", "output": "true"},
+        {"input": "", "output": "true"},
+        {"input": "(((({{{[[]]}}}))))", "output": "true"}
+    ],
+    "tags": ["String", "Stack"],
+    "input_format": "Input a string containing parentheses",
+    "output_format": "Print 'true' if valid, 'false' otherwise"
+    },
+    {
+    "id": 5,
+    "title": "Factorial of a Number",
+    "description": "Given a non-negative integer n, return the factorial of n. The factorial of n is the product of all positive integers less than or equal to n.",
+    "sample_input": "5",
+    "sample_output": "120",
+    "difficulty": "Easy",
+    "constraints": [
+        "0 <= n <= 20",
+        "Use iterative or recursive approach",
+        "Factorial of 0 is 1"
+    ],
+    "testcases": [
+        {"input": "5", "output": "120"},
+        {"input": "0", "output": "1"},
+        {"input": "1", "output": "1"},
+        {"input": "7", "output": "5040"},
+        {"input": "10", "output": "3628800"},
+        {"input": "20", "output": "2432902008176640000"}
+    ],
+    "tags": ["Math", "Recursion"],
+    "input_format": "Input a single non-negative integer",
+    "output_format": "Print the factorial of the number"
+    },
+    {
+    "id": 6,
+    "title": "Prime Number Check",
+    "description": "Given a positive integer, determine if it is a prime number. A prime number is a natural number greater than 1 that has no positive divisors other than 1 and itself. This means it cannot be formed by multiplying two smaller natural numbers. The first few prime numbers are 2, 3, 5, 7, 11, 13, 17, 19, 23, and so on. Note that 1 is not considered a prime number because it does not meet the definition of having exactly two distinct positive divisors.",
+    "sample_input": "7",
+    "sample_output": "true",
+    "difficulty": "Easy",
+    "constraints": [
+        "1 <= n <= 10^6",
+        "Input will be a positive integer",
+        "Optimize for large numbers (use efficient algorithms)",
+        "1 is not a prime number"
+    ],
+    "testcases": [
+        {"input": "7", "output": "true"},
+        {"input": "4", "output": "false"},
+        {"input": "1", "output": "false"},
+        {"input": "2", "output": "true"},
+        {"input": "97", "output": "true"},
+        {"input": "100", "output": "false"},
+        {"input": "7919", "output": "true"},
+        {"input": "1000000", "output": "false"}
+    ],
+    "tags": ["Math", "Number Theory", "Algorithms"],
+    "input_format": "Input a single positive integer",
+    "output_format": "Print 'true' if prime, 'false' otherwise"
+    },
+    {
+    "id": 7,
+    "title": "Sort Array",
+    "description": "Given an array of integers, sort the array in non-decreasing order. You can use any sorting algorithm such as bubble sort, merge sort, quicksort, or built-in sort functions. The array should be sorted from smallest to largest value.",
+    "sample_input": "5\n5\n2\n8\n1\n9",
+    "sample_output": "1\n2\n5\n8\n9",
+    "difficulty": "Easy",
+    "constraints": [
+        "1 <= arr.length <= 10^4",
+        "-10^5 <= arr[i] <= 10^5",
+        "Array may contain duplicate values",
+        "Sort in ascending order"
+    ],
+    "testcases": [
+        {"input": "5\n5\n2\n8\n1\n9", "output": "1\n2\n5\n8\n9"},
+        {"input": "8\n3\n1\n4\n1\n5\n9\n2\n6", "output": "1\n1\n2\n3\n4\n5\n6\n9"},
+        {"input": "5\n-5\n-2\n-8\n0\n3", "output": "-8\n-5\n-2\n0\n3"},
+        {"input": "1\n1", "output": "1"},
+        {"input": "5\n5\n4\n3\n2\n1", "output": "1\n2\n3\n4\n5"},
+        {"input": "4\n1\n1\n1\n1", "output": "1\n1\n1\n1"}
+    ],
+    "tags": ["Array", "Sorting", "Algorithms"],
+    "input_format": "First line: number of elements (n)\nNext n lines: array elements",
+    "output_format": "Print sorted array elements, each on a new line"
+    },
+
+
 ]
 
 
