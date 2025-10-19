@@ -208,14 +208,16 @@ def home():
 
 @app.get("/questions")
 def get_questions():
+    list=[]
     for question in DSA_QUESTIONS:
-        return {
+        list.append({
             "id":question["id"],
             "title":question["title"],
             "description":question["description"],
             "tags":question["tags"],
             "difficulty":question["difficulty"]
-        }
+        })
+    return list
 
 
 @app.get("/questions/{qid}")
